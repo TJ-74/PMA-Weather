@@ -34,7 +34,7 @@ PM Weather Bot is an intelligent weather assistant that combines the power of AI
 - **Firebase Firestore** - NoSQL database for chat storage
 - **Firebase Authentication** - User authentication
 - **OpenWeatherMap API** - Weather data provider
-- **OpenAI API** - AI chat functionality
+- **Groq API** - AI chat functionality
 
 ### Maps & Visualization
 - **Leaflet.js** - Interactive maps
@@ -47,7 +47,7 @@ PM Weather Bot is an intelligent weather assistant that combines the power of AI
 
 Before you begin, ensure you have the following installed:
 - **Node.js** (version 18 or higher)
-- **npm** or **yarn**
+- **pnpm** (version 8 or higher)
 - **Git**
 
 ### Required API Keys
@@ -59,8 +59,8 @@ You'll need to obtain the following API keys:
    - Sign up for a free account
    - Generate an API key
 
-2. **OpenAI API Key**
-   - Visit [OpenAI Platform](https://platform.openai.com/)
+2. **Groq API Key**
+   - Visit [Groq Console](https://console.groq.com/)
    - Create an account and generate an API key
 
 3. **Firebase Project**
@@ -79,9 +79,7 @@ You'll need to obtain the following API keys:
 
 2. **Install dependencies**
    ```bash
-   npm install
-   # or
-   yarn install
+   pnpm install
    ```
 
 3. **Environment Setup**
@@ -91,8 +89,8 @@ You'll need to obtain the following API keys:
    # OpenWeatherMap API
    NEXT_PUBLIC_OPENWEATHER_API_KEY=your_openweather_api_key_here
    
-   # OpenAI API
-   OPENAI_API_KEY=your_openai_api_key_here
+   # Groq API
+   GROQ_API_KEY=your_groq_api_key_here
    
    # Firebase Configuration
    NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
@@ -123,9 +121,7 @@ You'll need to obtain the following API keys:
 
 5. **Run the development server**
    ```bash
-   npm run dev
-   # or
-   yarn dev
+   pnpm dev
    ```
 
 6. **Open your browser**
@@ -197,68 +193,6 @@ pm-weather-bot/
 └── README.md                     # This file
 ```
 
-## 🎨 Features in Detail
-
-### AI Chat Interface
-- Natural language processing for weather queries
-- Context-aware responses with detailed weather information
-- Markdown support for rich text formatting
-
-### Weather Data Display
-- Temperature (actual and feels-like)
-- Weather conditions and descriptions
-- Humidity and wind speed
-- Sunrise and sunset times
-- Location coordinates
-
-### Interactive Maps
-- Real-time weather overlays
-- Clickable location markers
-- Temperature visualization
-- Responsive map controls
-
-### Theme System
-- Comprehensive light/dark theme support
-- Smooth transitions between themes
-- Persistent theme preferences
-- Theme-aware components throughout the app
-
-### Authentication & Security
-- Firebase Authentication integration
-- Protected routes and data
-- User-specific chat history
-- Secure API key management
-
-## 🔧 Configuration
-
-### Customizing Weather Data
-You can modify the weather data displayed by editing the `WeatherData` interface in `app/components/Chat.tsx`:
-
-```typescript
-interface WeatherData {
-  coordinates: { lat: number; lon: number; };
-  city: string;
-  temperature: number;
-  feels_like: number;
-  description: string;
-  humidity: number;
-  wind_speed: number;
-  sunrise: string;
-  sunset: string;
-}
-```
-
-### Adding New Themes
-Extend the theme system by modifying `app/providers/ThemeProvider.tsx`:
-
-```typescript
-const customTheme = {
-  background: 'bg-your-custom-background',
-  text: 'text-your-custom-text',
-  // ... add more theme properties
-};
-```
-
 ## 🚀 Deployment
 
 ### Deploy to Vercel (Recommended)
@@ -276,26 +210,6 @@ const customTheme = {
    - Add environment variables in Vercel dashboard
    - Deploy automatically
 
-### Deploy to Other Platforms
-
-The app can be deployed to any platform that supports Next.js:
-- **Netlify**
-- **Railway**
-- **DigitalOcean App Platform**
-- **AWS Amplify**
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-### Development Guidelines
-
-1. **Fork the repository**
-2. **Create a feature branch** (`git checkout -b feature/AmazingFeature`)
-3. **Commit your changes** (`git commit -m 'Add some AmazingFeature'`)
-4. **Push to the branch** (`git push origin feature/AmazingFeature`)
-5. **Open a Pull Request**
-
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -303,29 +217,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - **OpenWeatherMap** for providing weather data API
-- **OpenAI** for AI chat capabilities
+- **Groq** for AI chat capabilities
 - **Firebase** for backend services
 - **Leaflet.js** for interactive maps
 - **Tailwind CSS** for styling framework
 - **Next.js** team for the amazing framework
-
-## 📞 Support
-
-If you have any questions or need help with setup, please:
-
-1. Check the [Issues](https://github.com/your-username/pm-weather-bot/issues) page
-2. Create a new issue if your problem isn't already addressed
-3. Provide detailed information about your setup and the issue
-
-## 🔮 Future Enhancements
-
-- [ ] Weather alerts and notifications
-- [ ] Extended forecast (7-day, hourly)
-- [ ] Weather widgets for embedding
-- [ ] Voice input/output capabilities
-- [ ] Weather data export functionality
-- [ ] Multiple location tracking
-- [ ] Weather comparison tools
 
 ---
 
