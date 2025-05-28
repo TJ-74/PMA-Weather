@@ -15,20 +15,30 @@ async function parseLocationFromMessage(message: string): Promise<string | null>
       messages: [
         {
           role: 'system',
-          content: `You are a location parsing assistant. Your task is to:
-1. Extract location mentions from the input text
-2. Format US locations as "City, State" (e.g., "Saint Louis, Missouri")
-3. Format international locations as "City, Country" (e.g., "London, United Kingdom")
-4. Handle common abbreviations (St. -> Saint, UK -> United Kingdom, USA -> United States)
-5. Return only the formatted location string, nothing else
-6. Return null if no valid location is found
+          content: `You are a weather query detection assistant. Your task is to:
 
-Examples:
-"weather in st louis mo" -> "Saint Louis, Missouri"
-"temperature in NYC" -> "New York City, New York"
-"forecast for london uk" -> "London, United Kingdom"
-"what's it like in tokyo" -> "Tokyo, Japan"
-"rain in portland or" -> "Portland, Oregon"`
+1. ONLY extract locations if the message is clearly asking about weather, temperature, forecast, or climate
+2. Ignore casual responses like "okay", "cool", "thanks", "yes", "no", etc.
+3. Look for weather-related keywords: weather, temperature, forecast, rain, snow, sunny, cloudy, hot, cold, humid, wind, storm, etc.
+4. Format locations as "City, State" for US or "City, Country" for international
+5. Return "null" if the message is NOT a weather query or contains no location
+
+Weather query examples that should extract locations:
+"What's the weather in New York?" -> "New York, New York"
+"Temperature in London?" -> "London, United Kingdom"
+"Will it rain in Seattle tomorrow?" -> "Seattle, Washington"
+"How hot is it in Phoenix?" -> "Phoenix, Arizona"
+
+Non-weather queries that should return null:
+"okay" -> null
+"cool" -> null
+"thanks" -> null
+"yes" -> null
+"tell me a joke" -> null
+"how are you?" -> null
+"that's interesting" -> null
+
+Only return a location if the message is clearly asking about weather AND mentions a place.`
         },
         {
           role: 'user',
@@ -46,8 +56,8 @@ Examples:
       return null;
     }
 
-    const formattedLocation = completion.choices[0].message.content.trim();
-    return formattedLocation === 'null' ? null : formattedLocation;
+    const result = completion.choices[0].message.content.trim();
+    return result === 'null' || result.toLowerCase() === 'null' ? null : result;
   } catch (error) {
     console.error('Error parsing location:', error);
     return null;
@@ -129,15 +139,29 @@ export async function POST(req: Request) {
     const { messages } = await req.json();
     const lastMessage = messages[messages.length - 1].content;
     
-    try {
-      const location = await parseLocationFromMessage(lastMessage);
-      
-      if (location) {
-        try {
-          const weatherData = await getWeatherData(location);
-          const emoji = getWeatherEmoji(weatherData.description);
+    // Pre-filter: only check for weather queries if the message contains weather-related keywords
+    const weatherKeywords = [
+      'weather', 'temperature', 'temp', 'forecast', 'rain', 'snow', 'sunny', 'cloudy', 
+      'hot', 'cold', 'warm', 'cool', 'humid', 'wind', 'storm', 'thunder', 'lightning',
+      'degrees', 'celsius', 'fahrenheit', 'precipitation', 'humidity', 'pressure',
+      'sunrise', 'sunset', 'UV', 'visibility', 'feels like', 'wind speed'
+    ];
+    
+    const messageText = lastMessage.toLowerCase();
+    const containsWeatherKeyword = weatherKeywords.some(keyword => 
+      messageText.includes(keyword.toLowerCase())
+    );
+    
+    if (containsWeatherKeyword) {
+      try {
+        const location = await parseLocationFromMessage(lastMessage);
+        
+        if (location) {
+          try {
+            const weatherData = await getWeatherData(location);
+            const emoji = getWeatherEmoji(weatherData.description);
 
-          const response = `Let me check the current weather in ${weatherData.city} for you. ${emoji}
+            const response = `Let me check the current weather in ${weatherData.city} for you. ${emoji}
 
 According to the latest data, it's currently ${weatherData.description} in ${weatherData.city}, with a temperature of ${weatherData.temperature}°C (feels like ${weatherData.feels_like}°C). The humidity is ${weatherData.humidity}% and the wind is blowing at ${weatherData.wind_speed} km/h. ${emoji}
 
@@ -145,31 +169,32 @@ The sun rose at ${weatherData.sunrise} and will set at ${weatherData.sunset} tod
 
 Would you like to know more about specific weather conditions or planning activities in ${weatherData.city}? Just let me know! 😊`;
 
-          return NextResponse.json({
-            role: 'assistant',
-            content: response,
-            weatherData: {
-              coordinates: weatherData.coordinates,
-              city: weatherData.city,
-              temperature: weatherData.temperature,
-              feels_like: weatherData.feels_like,
-              description: weatherData.description,
-              humidity: weatherData.humidity,
-              wind_speed: weatherData.wind_speed,
-              sunrise: weatherData.sunrise,
-              sunset: weatherData.sunset
-            }
-          });
-        } catch (error) {
-          console.error('Weather data error:', error);
-          return NextResponse.json({
-            role: 'assistant',
-            content: `I apologize, but I couldn't fetch the weather data for ${location} at the moment. Would you like to try another location or ask me something else?`
-          });
+            return NextResponse.json({
+              role: 'assistant',
+              content: response,
+              weatherData: {
+                coordinates: weatherData.coordinates,
+                city: weatherData.city,
+                temperature: weatherData.temperature,
+                feels_like: weatherData.feels_like,
+                description: weatherData.description,
+                humidity: weatherData.humidity,
+                wind_speed: weatherData.wind_speed,
+                sunrise: weatherData.sunrise,
+                sunset: weatherData.sunset
+              }
+            });
+          } catch (error) {
+            console.error('Weather data error:', error);
+            return NextResponse.json({
+              role: 'assistant',
+              content: `I apologize, but I couldn't fetch the weather data for ${location} at the moment. Would you like to try another location or ask me something else?`
+            });
+          }
         }
+      } catch (error) {
+        console.error('Location parsing error:', error);
       }
-    } catch (error) {
-      console.error('Location parsing error:', error);
     }
 
     // If not a weather query or weather processing failed, proceed with normal chat
