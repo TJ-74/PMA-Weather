@@ -56,8 +56,12 @@ Examples:
 
 async function getWeatherData(city: string) {
   try {
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000';
+      
     const response = await fetch(
-      `${process.env.VERCEL_URL || 'http://localhost:3000'}/api/weather?city=${encodeURIComponent(city)}`,
+      `${baseUrl}/api/weather?city=${encodeURIComponent(city)}`,
       { cache: 'no-store' }
     );
     const data = await response.json();
@@ -181,4 +185,4 @@ Remember to:
       { status: 500 }
     );
   }
-} 
+}
