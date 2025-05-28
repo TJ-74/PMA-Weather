@@ -1,12 +1,12 @@
 import OpenWeatherAPI from 'openweathermap-ts';
 import { NextResponse } from 'next/server';
 
-if (!process.env.OPENWEATHER_API_KEY) {
-  throw new Error('Missing OPENWEATHER_API_KEY environment variable');
+if (!process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY) {
+  throw new Error('Missing NEXT_PUBLIC_OPENWEATHER_API_KEY environment variable');
 }
 
 const weatherClient = new OpenWeatherAPI({
-  apiKey: process.env.OPENWEATHER_API_KEY,
+  apiKey: process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY,
   units: "metric"
 });
 
@@ -27,7 +27,7 @@ async function getWeatherData(locationQuery: string) {
     
     // Try geocoding with the normalized query
     const geoResponse = await fetch(
-      `http://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(normalizedQuery)}&limit=5&appid=${process.env.OPENWEATHER_API_KEY}`
+      `http://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(normalizedQuery)}&limit=5&appid=${process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY}`
     );
     
     if (!geoResponse.ok) {
@@ -76,7 +76,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'City parameter is required' }, { status: 400 });
   }
 
-  const API_KEY = process.env.OPENWEATHER_API_KEY;
+  const API_KEY = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
   if (!API_KEY) {
     return NextResponse.json({ error: 'OpenWeather API key not configured' }, { status: 500 });
   }

@@ -56,21 +56,57 @@ Examples:
 
 async function getWeatherData(city: string) {
   try {
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000';
-      
-    const response = await fetch(
-      `${baseUrl}/api/weather?city=${encodeURIComponent(city)}`,
-      { cache: 'no-store' }
-    );
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to fetch weather data');
+    const API_KEY = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
+    if (!API_KEY) {
+      throw new Error('OpenWeather API key not configured');
     }
-    
-    return data;
+
+    // First, get coordinates for the city
+    const geoUrl = `http://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(city)}&limit=1&appid=${API_KEY}`;
+    const geoResponse = await fetch(geoUrl);
+    const geoData = await geoResponse.json();
+
+    if (!geoData || geoData.length === 0) {
+      throw new Error('City not found');
+    }
+
+    const { lat, lon } = geoData[0];
+
+    // Then get weather data using coordinates
+    const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`;
+    const weatherResponse = await fetch(weatherUrl);
+    const weatherData = await weatherResponse.json();
+
+    if (weatherResponse.status !== 200) {
+      throw new Error(weatherData.message || 'Failed to fetch weather data');
+    }
+
+    // Format sunrise and sunset times
+    const sunrise = new Date(weatherData.sys.sunrise * 1000).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    const sunset = new Date(weatherData.sys.sunset * 1000).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    return {
+      city: weatherData.name,
+      coordinates: {
+        lat,
+        lon
+      },
+      temperature: Math.round(weatherData.main.temp),
+      feels_like: Math.round(weatherData.main.feels_like),
+      description: weatherData.weather[0].description,
+      humidity: weatherData.main.humidity,
+      wind_speed: Math.round(weatherData.wind.speed),
+      sunrise,
+      sunset
+    };
   } catch (error) {
     console.error('Error fetching weather:', error);
     throw error;
