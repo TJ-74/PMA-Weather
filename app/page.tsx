@@ -67,7 +67,7 @@ export default function Home() {
                 href="/dashboard"
                 className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white 
                   rounded-lg font-semibold text-lg hover:opacity-90 transition-all duration-300
-                  shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                  shadow-lg hover:shadow-xl transform hover:-translate-y-1 cursor-pointer"
               >
                 Try PM Weather Bot
               </Link>
@@ -75,7 +75,7 @@ export default function Home() {
                 href="#features"
                 className={`px-8 py-4 border-2 border-blue-500 rounded-lg font-semibold 
                   text-lg hover:bg-blue-500 hover:text-white transition-all duration-300
-                  ${themeConfig.text} transform hover:-translate-y-1`}
+                  ${themeConfig.text} transform hover:-translate-y-1 cursor-pointer`}
               >
                 Learn More
               </a>
@@ -145,18 +145,18 @@ export default function Home() {
             <div>
               <h4 className={`text-lg font-semibold mb-4 ${themeConfig.text}`}>Quick Links</h4>
               <ul className={`space-y-2 ${themeConfig.textMuted}`}>
-                <li><Link href="/dashboard" className="hover:text-blue-500 transition-colors">Dashboard</Link></li>
-                <li><a href="#features" className="hover:text-blue-500 transition-colors">Features</a></li>
-                <li><Link href="/login" className="hover:text-blue-500 transition-colors">Login</Link></li>
+                <li><Link href="/dashboard" className="hover:text-blue-500 transition-colors cursor-pointer">Dashboard</Link></li>
+                <li><a href="#features" className="hover:text-blue-500 transition-colors cursor-pointer">Features</a></li>
+                <li><Link href="/login" className="hover:text-blue-500 transition-colors cursor-pointer">Login</Link></li>
               </ul>
             </div>
             
             <div>
               <h4 className={`text-lg font-semibold mb-4 ${themeConfig.text}`}>Connect</h4>
               <ul className={`space-y-2 ${themeConfig.textMuted}`}>
-                <li><a href="https://github.com/your-repo" className="hover:text-blue-500 transition-colors">GitHub</a></li>
-                <li><a href="#" className="hover:text-blue-500 transition-colors">Documentation</a></li>
-                <li><a href="#" className="hover:text-blue-500 transition-colors">Support</a></li>
+                <li><a href="https://github.com/your-repo" className="hover:text-blue-500 transition-colors cursor-pointer">GitHub</a></li>
+                <li><a href="#" className="hover:text-blue-500 transition-colors cursor-pointer">Documentation</a></li>
+                <li><a href="#" className="hover:text-blue-500 transition-colors cursor-pointer">Support</a></li>
               </ul>
             </div>
           </div>

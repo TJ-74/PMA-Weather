@@ -38,7 +38,13 @@ interface ExtendedMessage extends Message {
   weatherData?: WeatherData;
 }
 
-export default function Chat() {
+interface ChatProps {
+  isSidebarOpen: boolean;
+  onSidebarClose: () => void;
+  onDeleteChat?: (chatId: string, chatTitle: string) => void;
+}
+
+export default function Chat({ isSidebarOpen, onSidebarClose, onDeleteChat }: ChatProps) {
   const [messages, setMessages] = useState<ExtendedMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -72,8 +78,10 @@ export default function Chat() {
       if (chatData && chatData.messages) {
         setMessages(chatData.messages);
         
-        // Update weather data if present in the last message
+        // Check if the latest assistant message contains forecast data and the user query was forecast-focused
         const lastMessage = chatData.messages[chatData.messages.length - 1];
+        const secondLastMessage = chatData.messages[chatData.messages.length - 2];
+        
         if (lastMessage?.weatherData && 
             lastMessage.weatherData.coordinates && 
             lastMessage.weatherData.city &&
@@ -85,9 +93,18 @@ export default function Chat() {
             lastMessage.weatherData.sunrise &&
             lastMessage.weatherData.sunset) {
           setSelectedWeatherData(lastMessage.weatherData);
+          
+          // Auto-show forecast if user asked for forecast-related information
+          if (secondLastMessage?.role === 'user' && secondLastMessage.content) {
+            const userQuery = secondLastMessage.content.toLowerCase();
+            const forecastKeywords = ['forecast', 'tomorrow', 'next week', 'will it rain', 'going to', 'next few days', 'week ahead', 'upcoming weather'];
+            const isForecastQuery = forecastKeywords.some(keyword => userQuery.includes(keyword));
+            setShowForecast(isForecastQuery);
+          }
         } else {
           setSelectedWeatherData(null);
           setIsMapOpen(false);
+          setShowForecast(false);
         }
       }
     });
@@ -174,11 +191,38 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-5rem)] relative overflow-hidden">
-      <ChatHistory onSelectChat={handleSelectChat} currentChatId={currentChatId} />
-      
-      <div className={`flex-1 flex relative transition-all duration-300 ${isMapOpen ? 'mr-[500px]' : ''}`}>
-        <div className="flex-1 flex flex-col min-w-0">
+    <div className="flex h-[calc(100vh-5rem)] w-full overflow-hidden">
+      {/* Chat History Sidebar */}
+      <div
+        className={`
+          ${isSidebarOpen ? 'w-80' : 'w-0'} 
+          flex-shrink-0 transition-all duration-300 ease-in-out 
+          ${themeConfig.chat.container} ${themeConfig.border}
+          border-r overflow-hidden
+          md:relative fixed inset-y-0 left-0 z-50
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}
+      >
+        <div className={`flex flex-col h-full w-80 ${isSidebarOpen ? '' : 'opacity-0 md:opacity-100'} transition-opacity duration-300`}>
+          <div className="flex-1 overflow-y-auto">
+            <ChatHistory
+              onSelectChat={(chatId) => {
+                handleSelectChat(chatId);
+                // Only close sidebar on mobile screens
+                if (window.innerWidth < 768) {
+                  onSidebarClose();
+                }
+              }}
+              currentChatId={currentChatId}
+              onDeleteChat={onDeleteChat}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col">
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.length === 0 && (
               <div className="text-center py-16">
@@ -198,9 +242,102 @@ export default function Chat() {
                   </svg>
                 </div>
                 <h3 className={`text-2xl font-bold ${themeConfig.text} mb-3`}>Ask About Weather</h3>
-                <p className={`${themeConfig.textMuted} max-w-md mx-auto`}>
+                <p className={`${themeConfig.textMuted} max-w-md mx-auto mb-8`}>
                   Get real-time weather updates for any location! Try asking about temperature, forecast, or current conditions.
                 </p>
+
+                {/* Sample Questions */}
+                <div className="max-w-2xl mx-auto">
+                  <p className={`text-sm font-medium ${themeConfig.text} mb-4`}>Try these sample questions:</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[
+                      "What's the weather in New York?",
+                      "What's the forecast for London?",
+                      "Will it rain in Tokyo tomorrow?",
+                      "Show me the weather forecast for Paris",
+                      "What's the humidity in Miami?",
+                      "How's the weather this week in Los Angeles?"
+                    ].map((question, index) => (
+                      <button
+                        key={index}
+                        onClick={async () => {
+                          if (!user || isLoading) return;
+                          
+                          const userMessage: ExtendedMessage = {
+                            role: 'user',
+                            content: question,
+                            timestamp: Date.now()
+                          };
+
+                          let chatId = currentChatId;
+                          if (!chatId) {
+                            chatId = await chatService.createChat(user.uid, question);
+                            setCurrentChatId(chatId);
+                          } else {
+                            await chatService.addMessage(chatId, userMessage);
+                          }
+
+                          setIsLoading(true);
+
+                          try {
+                            const response = await fetch('/api/chat', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                messages: [...messages, userMessage].map(msg => ({
+                                  role: msg.role,
+                                  content: msg.content
+                                }))
+                              }),
+                            });
+
+                            if (!response.ok) {
+                              throw new Error('Failed to get response');
+                            }
+
+                            const data = await response.json();
+                            const assistantMessage: ExtendedMessage = {
+                              role: 'assistant',
+                              content: data.content || 'Sorry, I encountered an error.',
+                              timestamp: Date.now(),
+                              weatherData: data.weatherData
+                            };
+
+                            await chatService.addMessage(chatId, assistantMessage);
+                          } catch (error) {
+                            console.error('Error:', error);
+                            const errorMessage: ExtendedMessage = {
+                              role: 'assistant',
+                              content: 'Sorry, I encountered an error while processing your request. Please try again.',
+                              timestamp: Date.now()
+                            };
+                            await chatService.addMessage(chatId, errorMessage);
+                          } finally {
+                            setIsLoading(false);
+                          }
+                        }}
+                        disabled={isLoading}
+                        className={`p-3 rounded-lg border ${themeConfig.border} text-left transition-all duration-200 cursor-pointer hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${
+                          themeConfig.background.includes('gray-900')
+                            ? 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-200'
+                            : 'bg-white/50 hover:bg-gray-50 text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-sm">{question}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <p className={`text-xs ${themeConfig.textMuted} mt-4`}>
+                    Click any question to send it directly, or type your own weather question below.
+                  </p>
+                </div>
               </div>
             )}
             
@@ -364,7 +501,7 @@ export default function Chat() {
             <div ref={messagesEndRef} />
           </div>
 
-          <form onSubmit={handleSubmit} className={`p-4 border-t ${themeConfig.border}`}>
+          <form onSubmit={handleSubmit} className={`p-4 border-t ${themeConfig.border} flex-shrink-0`}>
             <div className="flex space-x-4">
               <input
                 type="text"
@@ -377,7 +514,7 @@ export default function Chat() {
                 type="submit"
                 disabled={isLoading}
                 className={`px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg
-                  disabled:opacity-50 hover:opacity-90 transition-opacity`}
+                  disabled:opacity-50 hover:opacity-90 transition-opacity flex-shrink-0 cursor-pointer`}
               >
                 Send
               </button>
@@ -386,13 +523,23 @@ export default function Chat() {
         </div>
 
         {/* Weather Map Panel */}
-        <div 
-          className={`w-[500px] fixed right-0 top-[5rem] bottom-0 border-l ${themeConfig.border}
-            transition-transform duration-300 ${themeConfig.chat.container} shadow-lg
-            ${isMapOpen ? 'translate-x-0' : 'translate-x-full'}`}
-        >
-          {selectedWeatherData && (
-            <>
+        {isMapOpen && selectedWeatherData && (
+          <>
+            {/* Mobile backdrop overlay */}
+            <div 
+              className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+              onClick={() => {
+                setIsMapOpen(false);
+                setSelectedWeatherData(null);
+              }}
+            />
+            
+            <div className={`
+              w-full md:w-[500px] flex-shrink-0 
+              fixed md:relative inset-0 md:inset-auto
+              border-l ${themeConfig.border} ${themeConfig.chat.container} shadow-lg
+              z-50 md:z-auto
+            `}>
               <div className="p-4 flex items-center justify-between bg-gradient-to-r from-blue-500/10 to-purple-600/10">
                 <div className="flex items-center space-x-2">
                   <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -407,23 +554,23 @@ export default function Chat() {
                   }}
                   className={`p-2 rounded-lg transition-colors ${themeConfig.textMuted} ${
                     themeConfig.chat.container.includes('gray-800') ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-                  }`}
+                  } cursor-pointer`}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
-              <div className="h-[calc(100vh-9rem)]">
+              <div className="h-[calc(100vh-9rem)] md:h-[calc(100vh-9rem)]">
                 <WeatherMap
                   lat={selectedWeatherData.coordinates.lat}
                   lon={selectedWeatherData.coordinates.lon}
                   cityName={selectedWeatherData.city}
                 />
               </div>
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

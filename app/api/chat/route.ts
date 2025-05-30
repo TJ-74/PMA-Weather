@@ -64,6 +64,61 @@ Only return a location if the message is clearly asking about weather AND mentio
   }
 }
 
+async function analyzeWeatherQueryType(message: string): Promise<{type: 'current' | 'forecast' | 'mixed', timeframe?: string}> {
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: 'system',
+          content: `You are a weather query analyzer. Analyze the user's message and determine what type of weather information they're asking for.
+
+Categories:
+- "current": Current weather conditions (today, now, currently)
+- "forecast": Future weather predictions (tomorrow, next week, weekend, forecast, will it rain, etc.)
+- "mixed": Both current and forecast information
+
+Look for time indicators:
+- Current: "now", "today", "current", "currently", "at the moment", "right now"
+- Forecast: "tomorrow", "next week", "this weekend", "forecast", "will it", "going to", "next few days", "week ahead"
+
+Return ONLY one word: "current", "forecast", or "mixed"
+
+Examples:
+"What's the weather in Paris?" -> current
+"What's the weather like in Tokyo today?" -> current
+"Will it rain in London tomorrow?" -> forecast
+"What's the forecast for New York?" -> forecast
+"Show me weather forecast for Miami" -> forecast
+"How's the weather in Berlin this week?" -> forecast
+"What's the current weather and forecast for Boston?" -> mixed`
+        },
+        {
+          role: 'user',
+          content: message
+        }
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.1,
+      max_tokens: 10,
+      top_p: 0.9,
+      stream: false,
+    });
+
+    const result = completion.choices[0]?.message?.content?.trim().toLowerCase();
+    
+    if (result === 'forecast') {
+      return { type: 'forecast' };
+    } else if (result === 'mixed') {
+      return { type: 'mixed' };
+    } else {
+      return { type: 'current' };
+    }
+  } catch (error) {
+    console.error('Error analyzing query type:', error);
+    return { type: 'current' };
+  }
+}
+
 async function getWeatherData(city: string) {
   try {
     const API_KEY = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
@@ -189,14 +244,57 @@ export async function POST(req: Request) {
           try {
             const weatherData = await getWeatherData(location);
             const emoji = getWeatherEmoji(weatherData.description);
+            const queryAnalysis = await analyzeWeatherQueryType(lastMessage);
 
-            const response = `Let me check the current weather in ${weatherData.city} for you. ${emoji}
+            // Generate a contextual response that answers the specific question
+            const contextualResponse = await groq.chat.completions.create({
+              messages: [
+                {
+                  role: 'system',
+                  content: `You are a weather assistant with REAL, CURRENT weather data for ${weatherData.city}. This is NOT general information - this is the ACTUAL, LIVE weather data I just fetched from OpenWeather API.
 
-According to the latest data, it's currently ${weatherData.description} in ${weatherData.city}, with a temperature of ${weatherData.temperature}°C (feels like ${weatherData.feels_like}°C). The humidity is ${weatherData.humidity}% and the wind is blowing at ${weatherData.wind_speed} km/h. ${emoji}
+IMPORTANT: The weather data below is 100% REAL and CURRENT for ${weatherData.city}. Use it confidently to answer the user's question.
 
-The sun rose at ${weatherData.sunrise} and will set at ${weatherData.sunset} today. I've also included an interactive map below where you can explore the area! 🗺️
+CURRENT WEATHER IN ${weatherData.city.toUpperCase()}:
+• Temperature: ${weatherData.temperature}°C (feels like ${weatherData.feels_like}°C)
+• Conditions: ${weatherData.description}
+• Humidity: ${weatherData.humidity}%
+• Wind Speed: ${weatherData.wind_speed} km/h
+• Sunrise: ${weatherData.sunrise}
+• Sunset: ${weatherData.sunset}
 
-Would you like to know more about specific weather conditions or planning activities in ${weatherData.city}? Just let me know! 😊`;
+7-DAY FORECAST FOR ${weatherData.city.toUpperCase()}:
+${weatherData.forecast?.map((day: any, i: number) => {
+  const date = new Date(day.date);
+  const dayName = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : date.toLocaleDateString('en-US', { weekday: 'long' });
+  const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${dayName} (${dateStr}): ${day.temp}°C, ${day.description}`;
+}).join('\n') || 'No forecast data available'}
+
+Your job:
+1. Use this REAL data to directly answer their specific question about ${weatherData.city}
+2. Be confident - this data is accurate and current
+3. If they ask about rain, check TODAY and TOMORROW's forecast descriptions
+4. If they ask about temperature, use the current temperature
+5. If they ask "will it rain tomorrow", look specifically at Tomorrow's forecast
+6. Be conversational and helpful
+7. Add relevant emojis and weather advice
+
+Answer their question directly using this real data!`
+                },
+                {
+                  role: 'user',
+                  content: lastMessage
+                }
+              ],
+              model: "llama-3.3-70b-versatile",
+              temperature: 0.3,
+              max_tokens: 1024,
+              top_p: 0.9,
+              stream: false,
+            });
+
+            const response = contextualResponse.choices[0]?.message?.content || `Here's the weather information for ${weatherData.city}! ${emoji}`;
 
             return NextResponse.json({
               role: 'assistant',

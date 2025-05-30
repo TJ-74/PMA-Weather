@@ -36,21 +36,33 @@ export default function Login() {
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4 pt-16">
-        <div className="max-w-md w-full bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl">
+      <div className={`min-h-screen ${themeConfig.background} flex items-center justify-center pt-16`}>
+        <div className={`max-w-md w-full ${themeConfig.chat.container} p-8 rounded-2xl shadow-xl border ${themeConfig.border}`}>
           <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <h2 className={`text-3xl font-bold ${themeConfig.text} mb-2`}>
               {isSignUp ? 'Create Account' : 'Welcome Back'}
             </h2>
-            <p className="text-gray-600 dark:text-gray-300">
+            <p className={themeConfig.textMuted}>
               {isSignUp 
                 ? 'Sign up to start exploring weather insights'
                 : 'Sign in to continue to Weather Chat Assistant'
               }
             </p>
-            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-100 dark:border-blue-800">
-              <p className="font-medium mb-1 text-blue-800 dark:text-blue-300">Note:</p>
-              <p className="text-blue-700 dark:text-blue-200 text-sm">
+            <div className={`mt-4 p-4 rounded-lg border ${
+              themeConfig.background.includes('gray-900') 
+                ? 'bg-blue-900/30 border-blue-800' 
+                : 'bg-blue-50 border-blue-100'
+            }`}>
+              <p className={`font-medium mb-1 ${
+                themeConfig.background.includes('gray-900') 
+                  ? 'text-blue-300' 
+                  : 'text-blue-800'
+              }`}>Note:</p>
+              <p className={`text-sm ${
+                themeConfig.background.includes('gray-900') 
+                  ? 'text-blue-200' 
+                  : 'text-blue-700'
+              }`}>
                 You can use any email address and password to create an account. This is a demo application, so no email verification is required.
               </p>
             </div>
@@ -58,7 +70,7 @@ export default function Login() {
 
           <form onSubmit={handleEmailAuth} className="mt-8 space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+              <label htmlFor="email" className={`block text-sm font-medium ${themeConfig.text}`}>
                 Email address
               </label>
               <input
@@ -67,16 +79,16 @@ export default function Login() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg 
-                  text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300
+                className={`mt-1 block w-full px-3 py-2 ${themeConfig.chat.input.background} border ${themeConfig.border} rounded-lg 
+                  text-sm ${themeConfig.chat.input.text} ${themeConfig.chat.input.placeholder}
                   focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                  transition duration-150 ease-in-out"
+                  transition duration-150 ease-in-out`}
                 placeholder="Enter your email"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+              <label htmlFor="password" className={`block text-sm font-medium ${themeConfig.text}`}>
                 Password
               </label>
               <input
@@ -85,17 +97,25 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg 
-                  text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300
+                className={`mt-1 block w-full px-3 py-2 ${themeConfig.chat.input.background} border ${themeConfig.border} rounded-lg 
+                  text-sm ${themeConfig.chat.input.text} ${themeConfig.chat.input.placeholder}
                   focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                  transition duration-150 ease-in-out"
+                  transition duration-150 ease-in-out`}
                 placeholder="Enter your password"
               />
             </div>
 
             {error && (
-              <div className="bg-red-50 dark:bg-red-900/30 border border-red-100 dark:border-red-800 rounded-lg p-3">
-                <p className="text-red-600 dark:text-red-300 text-sm">{error}</p>
+              <div className={`rounded-lg p-3 border ${
+                themeConfig.background.includes('gray-900') 
+                  ? 'bg-red-900/30 border-red-800' 
+                  : 'bg-red-50 border-red-100'
+              }`}>
+                <p className={`text-sm ${
+                  themeConfig.background.includes('gray-900') 
+                    ? 'text-red-300' 
+                    : 'text-red-600'
+                }`}>{error}</p>
               </div>
             )}
 
@@ -103,10 +123,10 @@ export default function Login() {
               type="submit"
               disabled={isLoading}
               className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg
-                text-sm font-medium text-white
+                text-sm font-medium text-white cursor-pointer
                 ${isLoading 
-                  ? 'bg-blue-400 dark:bg-blue-600 cursor-not-allowed' 
-                  : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'}
+                  ? 'bg-blue-400 cursor-not-allowed' 
+                  : 'bg-blue-600 hover:bg-blue-700'}
                 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
                 transition duration-150 ease-in-out`}
             >
@@ -121,12 +141,16 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-300">
+          <p className={`mt-6 text-center text-sm ${themeConfig.textMuted}`}>
             {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
             <button
               onClick={() => setIsSignUp(!isSignUp)}
-              className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300
-                focus:outline-none focus:underline transition duration-150 ease-in-out"
+              className={`font-medium text-blue-600 hover:text-blue-500 cursor-pointer
+                focus:outline-none focus:underline transition duration-150 ease-in-out ${
+                  themeConfig.background.includes('gray-900') 
+                    ? 'text-blue-400 hover:text-blue-300' 
+                    : 'text-blue-600 hover:text-blue-500'
+                }`}
             >
               {isSignUp ? 'Sign In' : 'Sign Up'}
             </button>
