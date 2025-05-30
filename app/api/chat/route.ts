@@ -82,7 +82,7 @@ async function getWeatherData(city: string) {
 
     const { lat, lon } = geoData[0];
 
-    // Then get weather data using coordinates
+    // Get current weather data
     const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`;
     const weatherResponse = await fetch(weatherUrl);
     const weatherData = await weatherResponse.json();
@@ -90,6 +90,34 @@ async function getWeatherData(city: string) {
     if (weatherResponse.status !== 200) {
       throw new Error(weatherData.message || 'Failed to fetch weather data');
     }
+
+    // Get forecast data
+    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`;
+    const forecastResponse = await fetch(forecastUrl);
+    const forecastData = await forecastResponse.json();
+
+    if (forecastResponse.status !== 200) {
+      throw new Error(forecastData.message || 'Failed to fetch forecast data');
+    }
+
+    // Process forecast data to get daily forecasts
+    const dailyForecasts = forecastData.list.reduce((acc: any[], item: any) => {
+      const date = new Date(item.dt * 1000).toISOString().split('T')[0];
+      const existingForecast = acc.find((f: any) => {
+        const forecastDate = new Date(f.date).toISOString().split('T')[0];
+        return forecastDate === date;
+      });
+      
+      if (!existingForecast) {
+        acc.push({
+          date: item.dt * 1000,
+          temp: Math.round(item.main.temp),
+          description: item.weather[0].description,
+          icon: item.weather[0].icon
+        });
+      }
+      return acc;
+    }, []).slice(0, 7); // Get first 7 days
 
     // Format sunrise and sunset times
     const sunrise = new Date(weatherData.sys.sunrise * 1000).toLocaleTimeString('en-US', {
@@ -115,7 +143,8 @@ async function getWeatherData(city: string) {
       humidity: weatherData.main.humidity,
       wind_speed: Math.round(weatherData.wind.speed),
       sunrise,
-      sunset
+      sunset,
+      forecast: dailyForecasts
     };
   } catch (error) {
     console.error('Error fetching weather:', error);
@@ -181,7 +210,8 @@ Would you like to know more about specific weather conditions or planning activi
                 humidity: weatherData.humidity,
                 wind_speed: weatherData.wind_speed,
                 sunrise: weatherData.sunrise,
-                sunset: weatherData.sunset
+                sunset: weatherData.sunset,
+                forecast: weatherData.forecast
               }
             });
           } catch (error) {

@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
 import dynamic from 'next/dynamic';
 import { onSnapshot, query, collection, where, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import WeatherForecast from './WeatherForecast';
 
 const WeatherMap = dynamic(() => import('./WeatherMap'), { ssr: false });
 
@@ -25,6 +26,12 @@ interface WeatherData {
   wind_speed: number;
   sunrise: string;
   sunset: string;
+  forecast?: {
+    date: string;
+    temp: number;
+    description: string;
+    icon: string;
+  }[];
 }
 
 interface ExtendedMessage extends Message {
@@ -41,6 +48,7 @@ export default function Chat() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [selectedWeatherData, setSelectedWeatherData] = useState<WeatherData | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [showForecast, setShowForecast] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -207,14 +215,14 @@ export default function Chat() {
                   className={`max-w-[70%] rounded-lg p-4 ${
                     message.role === 'user'
                       ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
-                      : `${themeConfig.chat.messages.assistant}`
+                      : `${themeConfig.chat.container} border ${themeConfig.border}`
                   }`}
                 >
                   {message.role === 'assistant' && message.weatherData ? (
                     <>
                       <div className="space-y-4">
-                        <div className={`mt-3 mb-4 ${themeConfig.textMuted}`}>
-                          {message.content}
+                        <div className={themeConfig.text}>
+                          <ReactMarkdown>{message.content}</ReactMarkdown>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="flex items-center space-x-2">
@@ -296,28 +304,48 @@ export default function Chat() {
                             </div>
                             <span className={`font-medium ${themeConfig.text}`}>{message.weatherData.city}</span>
                           </div>
-                          <button
-                            onClick={() => message.weatherData && handleViewMap(message.weatherData)}
-                            className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gradient-to-r from-blue-500/10 to-purple-600/10 text-blue-500 hover:text-blue-600 rounded-lg transition-colors"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                            </svg>
-                            <span>View Map</span>
-                          </button>
+                          <div className="flex items-center space-x-4">
+                            {message.weatherData.forecast && (
+                              <button
+                                onClick={() => setShowForecast(!showForecast)}
+                                className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gradient-to-r from-blue-500/10 to-purple-600/10 text-blue-500 hover:text-blue-600 rounded-lg transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span>{showForecast ? 'Hide Forecast' : 'View Forecast'}</span>
+                              </button>
+                            )}
+                            <button
+                              onClick={() => message.weatherData && handleViewMap(message.weatherData)}
+                              className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gradient-to-r from-blue-500/10 to-purple-600/10 text-blue-500 hover:text-blue-600 rounded-lg transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                              </svg>
+                              <span>View Map</span>
+                            </button>
+                          </div>
                         </div>
+                        {showForecast && message.weatherData.forecast && (
+                          <div className="mt-4 border-t pt-4 bg-gradient-to-r from-blue-500/5 to-purple-600/5 rounded-lg">
+                            <WeatherForecast forecast={message.weatherData.forecast} />
+                          </div>
+                        )}
                       </div>
                     </>
                   ) : (
-                    <ReactMarkdown
-                      components={{
-                        p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
-                        ul: ({children}) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
-                        li: ({children}) => <li className="mb-1">{children}</li>,
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
+                    <div className={message.role === 'user' ? 'text-white' : themeConfig.text}>
+                      <ReactMarkdown
+                        components={{
+                          p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                          ul: ({children}) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
+                          li: ({children}) => <li className="mb-1">{children}</li>,
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
                   )}
                 </div>
               </div>
