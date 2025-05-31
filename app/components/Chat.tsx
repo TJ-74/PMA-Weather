@@ -10,6 +10,7 @@ import dynamic from 'next/dynamic';
 import { onSnapshot, query, collection, where, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import WeatherForecast from './WeatherForecast';
+import { generateWeatherReportPDF, generateQuickWeatherPDF } from '../utils/pdfExport';
 
 const WeatherMap = dynamic(() => import('./WeatherMap'), { ssr: false });
 
@@ -48,6 +49,11 @@ export default function Chat({ isSidebarOpen, onSidebarClose, onDeleteChat }: Ch
   const [messages, setMessages] = useState<ExtendedMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingPdfId, setLoadingPdfId] = useState<string | null>(null); // For tracking which AI report is loading
+  const [loadingFullChat, setLoadingFullChat] = useState(false); // For tracking full chat export loading
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+  const [showMap, setShowMap] = useState<{ [key: string]: boolean }>({});
+  const [temperatureUnit, setTemperatureUnit] = useState<'C' | 'F'>('C'); // Temperature unit toggle
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const { themeConfig } = useTheme();
@@ -55,6 +61,19 @@ export default function Chat({ isSidebarOpen, onSidebarClose, onDeleteChat }: Ch
   const [selectedWeatherData, setSelectedWeatherData] = useState<WeatherData | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [showForecast, setShowForecast] = useState(false);
+
+  // Temperature conversion functions
+  const convertTemperature = (tempC: number, unit: 'C' | 'F'): number => {
+    if (unit === 'F') {
+      return Math.round((tempC * 9/5) + 32);
+    }
+    return Math.round(tempC);
+  };
+
+  const formatTemperature = (tempC: number, unit: 'C' | 'F'): string => {
+    const converted = convertTemperature(tempC, unit);
+    return `${converted}°${unit}`;
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -370,7 +389,18 @@ export default function Chat({ isSidebarOpen, onSidebarClose, onDeleteChat }: Ch
                             </div>
                             <div className="leading-tight">
                               <div className={`text-sm ${themeConfig.textMuted}`}>Temperature</div>
-                              <div className={`font-medium ${themeConfig.text}`}>{message.weatherData.temperature}°C (Feels like {message.weatherData.feels_like}°C)</div>
+                              <div className={`font-medium ${themeConfig.text}`}>{formatTemperature(message.weatherData.temperature, temperatureUnit)}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500/10 to-purple-600/10 flex items-center justify-center">
+                              <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                              </svg>
+                            </div>
+                            <div className="leading-tight">
+                              <div className={`text-sm ${themeConfig.textMuted}`}>Feels Like</div>
+                              <div className={`font-medium ${themeConfig.text}`}>{formatTemperature(message.weatherData.feels_like, temperatureUnit)}</div>
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
@@ -442,10 +472,51 @@ export default function Chat({ isSidebarOpen, onSidebarClose, onDeleteChat }: Ch
                             <span className={`font-medium ${themeConfig.text}`}>{message.weatherData.city}</span>
                           </div>
                           <div className="flex items-center space-x-4">
+                            {/* Temperature Unit Toggle */}
+                            <button
+                              onClick={() => setTemperatureUnit(temperatureUnit === 'C' ? 'F' : 'C')}
+                              className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gradient-to-r from-orange-500/10 to-red-600/10 text-orange-600 hover:text-orange-700 rounded-lg transition-colors cursor-pointer"
+                              title={`Switch to ${temperatureUnit === 'C' ? 'Fahrenheit' : 'Celsius'}`}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                              </svg>
+                              <span>°{temperatureUnit === 'C' ? 'F' : 'C'}</span>
+                            </button>
+                            
+                            {/* PDF Export button for this specific weather data */}
+                            <button
+                              onClick={async () => {
+                                if (message.weatherData) {
+                                  const buttonId = `pdf-${index}`;
+                                  setLoadingPdfId(buttonId);
+                                  try {
+                                    await generateQuickWeatherPDF(message.weatherData, temperatureUnit);
+                                  } catch (error) {
+                                    console.error('Error generating PDF:', error);
+                                  } finally {
+                                    setLoadingPdfId(null);
+                                  }
+                                }
+                              }}
+                              disabled={loadingPdfId === `pdf-${index}`}
+                              className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gradient-to-r from-green-500/10 to-emerald-600/10 text-green-600 hover:text-green-700 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Export this weather data as AI-generated PDF report"
+                            >
+                              {loadingPdfId === `pdf-${index}` ? (
+                                <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              )}
+                              <span>{loadingPdfId === `pdf-${index}` ? 'Generating...' : 'AI Report'}</span>
+                            </button>
+                            
                             {message.weatherData.forecast && (
                               <button
                                 onClick={() => setShowForecast(!showForecast)}
-                                className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gradient-to-r from-blue-500/10 to-purple-600/10 text-blue-500 hover:text-blue-600 rounded-lg transition-colors"
+                                className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gradient-to-r from-blue-500/10 to-purple-600/10 text-blue-500 hover:text-blue-600 rounded-lg transition-colors cursor-pointer"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -455,7 +526,7 @@ export default function Chat({ isSidebarOpen, onSidebarClose, onDeleteChat }: Ch
                             )}
                             <button
                               onClick={() => message.weatherData && handleViewMap(message.weatherData)}
-                              className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gradient-to-r from-blue-500/10 to-purple-600/10 text-blue-500 hover:text-blue-600 rounded-lg transition-colors"
+                              className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gradient-to-r from-blue-500/10 to-purple-600/10 text-blue-500 hover:text-blue-600 rounded-lg transition-colors cursor-pointer"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
@@ -466,7 +537,11 @@ export default function Chat({ isSidebarOpen, onSidebarClose, onDeleteChat }: Ch
                         </div>
                         {showForecast && message.weatherData.forecast && (
                           <div className="mt-4 border-t pt-4 bg-gradient-to-r from-blue-500/5 to-purple-600/5 rounded-lg">
-                            <WeatherForecast forecast={message.weatherData.forecast} />
+                            <WeatherForecast 
+                              forecast={message.weatherData.forecast} 
+                              temperatureUnit={temperatureUnit}
+                              formatTemperature={formatTemperature}
+                            />
                           </div>
                         )}
                       </div>
@@ -502,7 +577,7 @@ export default function Chat({ isSidebarOpen, onSidebarClose, onDeleteChat }: Ch
           </div>
 
           <form onSubmit={handleSubmit} className={`p-4 border-t ${themeConfig.border} flex-shrink-0`}>
-            <div className="flex space-x-4">
+            <div className="flex items-center space-x-2">
               <input
                 type="text"
                 value={input}
@@ -510,13 +585,47 @@ export default function Chat({ isSidebarOpen, onSidebarClose, onDeleteChat }: Ch
                 placeholder="Ask about weather..."
                 className={`flex-1 p-2 rounded-lg border ${themeConfig.chat.input.background} ${themeConfig.chat.input.text} ${themeConfig.border} focus:outline-none focus:ring-2 focus:ring-blue-500`}
               />
+              
+              {/* Full chat export button */}
+              {messages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setLoadingFullChat(true);
+                    try {
+                      const chatMessages = messages.map(msg => ({
+                        role: msg.role,
+                        content: msg.content,
+                        timestamp: msg.timestamp,
+                        weatherData: msg.weatherData
+                      }));
+                      await generateWeatherReportPDF(chatMessages, 'Weather Chat Report', temperatureUnit);
+                    } catch (error) {
+                      console.error('Error generating PDF:', error);
+                    } finally {
+                      setLoadingFullChat(false);
+                    }
+                  }}
+                  disabled={loadingFullChat}
+                  className="p-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:opacity-90 transition-opacity flex-shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Export full chat as AI-generated PDF report"
+                >
+                  {loadingFullChat ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  )}
+                </button>
+              )}
+              
               <button
                 type="submit"
                 disabled={isLoading}
-                className={`px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg
-                  disabled:opacity-50 hover:opacity-90 transition-opacity flex-shrink-0 cursor-pointer`}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
-                Send
+                {isLoading ? 'Sending...' : 'Send'}
               </button>
             </div>
           </form>

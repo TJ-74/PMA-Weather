@@ -10,11 +10,33 @@ interface WeatherForecastProps {
     description: string;
     icon: string;
   }[];
+  temperatureUnit?: 'C' | 'F';
+  formatTemperature?: (tempC: number, unit: 'C' | 'F') => string;
 }
 
-export default function WeatherForecast({ forecast }: WeatherForecastProps) {
+export default function WeatherForecast({ 
+  forecast, 
+  temperatureUnit = 'C', 
+  formatTemperature 
+}: WeatherForecastProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { isDark } = useTheme();
+
+  // Helper function to convert temperature
+  const convertTemp = (tempC: number): number => {
+    if (temperatureUnit === 'F') {
+      return Math.round((tempC * 9/5) + 32);
+    }
+    return Math.round(tempC);
+  };
+
+  // Helper function to format temperature display
+  const formatTempDisplay = (tempC: number): string => {
+    if (formatTemperature) {
+      return formatTemperature(tempC, temperatureUnit);
+    }
+    return `${convertTemp(tempC)}°${temperatureUnit}`;
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -34,8 +56,8 @@ export default function WeatherForecast({ forecast }: WeatherForecastProps) {
     const textColor = isDark ? '#fff' : '#1a1a1a';
     const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
     
-    // Find temperature range
-    const temps = forecast.map(day => day.temp);
+    // Find temperature range (using converted temperatures)
+    const temps = forecast.map(day => convertTemp(day.temp));
     const maxTemp = Math.ceil(Math.max(...temps));
     const minTemp = Math.floor(Math.min(...temps));
     const tempRange = maxTemp - minTemp;
@@ -63,7 +85,7 @@ export default function WeatherForecast({ forecast }: WeatherForecastProps) {
       ctx.fillStyle = textColor;
       ctx.font = '12px Inter, system-ui, sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(`${Math.round(temp)}°`, padding - 10, y + 4);
+      ctx.fillText(`${Math.round(temp)}°${temperatureUnit}`, padding - 10, y + 4);
     }
 
     // Draw temperature line
@@ -73,7 +95,8 @@ export default function WeatherForecast({ forecast }: WeatherForecastProps) {
     
     forecast.forEach((day, i) => {
       const x = padding + (i * dayWidth);
-      const normalizedTemp = (day.temp - minTemp) / tempRange;
+      const convertedTemp = convertTemp(day.temp);
+      const normalizedTemp = (convertedTemp - minTemp) / tempRange;
       const y = padding + (graphHeight * (1 - normalizedTemp));
       
       if (i === 0) {
@@ -100,12 +123,12 @@ export default function WeatherForecast({ forecast }: WeatherForecastProps) {
       ctx.fillStyle = textColor;
       ctx.font = '12px Inter, system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(`${Math.round(day.temp)}°`, x, y - 15);
+      ctx.fillText(formatTempDisplay(day.temp), x, y - 15);
     });
     
     ctx.stroke();
 
-  }, [forecast, isDark]);
+  }, [forecast, isDark, temperatureUnit, formatTemperature]);
 
   return (
     <div className="w-full h-full min-h-[300px] p-4">
