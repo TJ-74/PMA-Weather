@@ -76,10 +76,12 @@ Categories:
 - "current": Current weather conditions (today, now, currently)
 - "forecast": Future weather predictions (tomorrow, next week, weekend, forecast, will it rain, etc.)
 - "mixed": Both current and forecast information
+- "none": No weather information requested
 
 Look for time indicators:
 - Current: "now", "today", "current", "currently", "at the moment", "right now"
 - Forecast: "tomorrow", "next week", "this weekend", "forecast", "will it", "going to", "next few days", "week ahead"
+- you have to be smart enough to figure out and make the decesion based on the message
 
 Return ONLY one word: "current", "forecast", or "mixed"
 
@@ -90,7 +92,12 @@ Examples:
 "What's the forecast for New York?" -> forecast
 "Show me weather forecast for Miami" -> forecast
 "How's the weather in Berlin this week?" -> forecast
-"What's the current weather and forecast for Boston?" -> mixed`
+"What's the current weather and forecast for Boston?" -> mixed
+
+Those are just the examples of the messages you will be getting, you have to be smart enough to figure out and make the decesion based on the message
+`
+
+
         },
         {
           role: 'user',
@@ -174,17 +181,27 @@ async function getWeatherData(city: string) {
       return acc;
     }, []).slice(0, 7); // Get first 7 days
 
-    // Format sunrise and sunset times
-    const sunrise = new Date(weatherData.sys.sunrise * 1000).toLocaleTimeString('en-US', {
+    // Format sunrise and sunset times with timezone information
+    const timezoneDisplayName = await getTimezoneFromCoordinates(lat, lon, city);
+    
+    // Calculate local times by adding the timezone offset from OpenWeather
+    const timezoneOffsetSeconds = weatherData.timezone; // seconds from UTC
+    const sunriseLocal = new Date((weatherData.sys.sunrise + timezoneOffsetSeconds) * 1000);
+    const sunsetLocal = new Date((weatherData.sys.sunset + timezoneOffsetSeconds) * 1000);
+
+    const sunrise = sunriseLocal.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
-      hour12: true
-    });
-    const sunset = new Date(weatherData.sys.sunset * 1000).toLocaleTimeString('en-US', {
+      hour12: true,
+      timeZone: 'UTC'
+    }) + ` (${timezoneDisplayName})`;
+    
+    const sunset = sunsetLocal.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
-      hour12: true
-    });
+      hour12: true,
+      timeZone: 'UTC'
+    }) + ` (${timezoneDisplayName})`;
 
     return {
       city: weatherData.name,
@@ -218,42 +235,83 @@ function getWeatherEmoji(description: string): string {
   return '🌡️';
 }
 
+async function getTimezoneFromCoordinates(lat: number, lon: number, cityName: string): Promise<string> {
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: 'system',
+          content: `You are a timezone expert. Given a city name and its coordinates, determine the appropriate timezone display name.
+
+Rules:
+- Return a user-friendly timezone name that people would recognize
+- Use common timezone names like "Eastern Time", "Pacific Time", "Japan Time", "Central European Time", etc.
+- For US locations, use standard time zone names (Eastern, Central, Mountain, Pacific, Alaska, Hawaii)
+- For international locations, use recognizable regional names or country-specific names
+- Consider daylight saving time variations but use the standard name
+- Keep it simple and user-friendly
+- Return only the timezone name, nothing else
+
+Examples:
+- New York, USA (40.7128, -74.0060) → "Eastern Time"
+- Tokyo, Japan (35.6762, 139.6503) → "Japan Time" 
+- London, UK (51.5074, -0.1278) → "Greenwich Mean Time"
+- Paris, France (48.8566, 2.3522) → "Central European Time"
+- Los Angeles, USA (34.0522, -118.2437) → "Pacific Time"
+- Sydney, Australia (-33.8688, 151.2093) → "Australian Eastern Time"
+- Moscow, Russia (55.7558, 37.6176) → "Moscow Time"`
+        },
+        {
+          role: 'user',
+          content: `City: ${cityName}, Coordinates: (${lat}, ${lon})`
+        }
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.1,
+      max_tokens: 50,
+      top_p: 0.9,
+      stream: false,
+    });
+
+    const timezoneName = completion.choices[0]?.message?.content?.trim();
+    return timezoneName || "Local Time";
+  } catch (error) {
+    console.error('Error getting timezone:', error);
+    return "Local Time";
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
     const lastMessage = messages[messages.length - 1].content;
     
-    // Pre-filter: only check for weather queries if the message contains weather-related keywords
-    const weatherKeywords = [
-      'weather', 'temperature', 'temp', 'forecast', 'rain', 'snow', 'sunny', 'cloudy', 
-      'hot', 'cold', 'warm', 'cool', 'humid', 'wind', 'storm', 'thunder', 'lightning',
-      'degrees', 'celsius', 'fahrenheit', 'precipitation', 'humidity', 'pressure',
-      'sunrise', 'sunset', 'UV', 'visibility', 'feels like', 'wind speed'
-    ];
-    
-    const messageText = lastMessage.toLowerCase();
-    const containsWeatherKeyword = weatherKeywords.some(keyword => 
-      messageText.includes(keyword.toLowerCase())
-    );
-    
-    if (containsWeatherKeyword) {
-      try {
-        const location = await parseLocationFromMessage(lastMessage);
-        
-        if (location) {
-          try {
-            const weatherData = await getWeatherData(location);
-            const emoji = getWeatherEmoji(weatherData.description);
-            const queryAnalysis = await analyzeWeatherQueryType(lastMessage);
+    // Try to parse location from any message - let AI determine if it's weather-related
+    try {
+      const location = await parseLocationFromMessage(lastMessage);
+      
+      if (location) {
+        try {
+          const weatherData = await getWeatherData(location);
+          const emoji = getWeatherEmoji(weatherData.description);
+          const queryAnalysis = await analyzeWeatherQueryType(lastMessage);
 
-            // Generate a contextual response that answers the specific question
-            const contextualResponse = await groq.chat.completions.create({
-              messages: [
-                {
-                  role: 'system',
-                  content: `You are a weather assistant with REAL, CURRENT weather data for ${weatherData.city}. This is NOT general information - this is the ACTUAL, LIVE weather data I just fetched from OpenWeather API.
+          // Generate a contextual response that answers the specific question
+          const contextualResponse = await groq.chat.completions.create({
+            messages: [
+              {
+                role: 'system',
+                content: `You are a weather assistant with REAL, CURRENT weather data for ${weatherData.city}. This is NOT general information - this is the ACTUAL, LIVE weather data I just fetched from OpenWeather API.
 
 IMPORTANT: The weather data below is 100% REAL and CURRENT for ${weatherData.city}. Use it confidently to answer the user's question.
+
+QUERY TYPE: ${queryAnalysis.type.toUpperCase()} - The user is asking for ${queryAnalysis.type} weather information.
+
+${queryAnalysis.type === 'current' ? 
+`FOCUS: Provide current weather conditions primarily. You may briefly mention forecast availability.` :
+queryAnalysis.type === 'forecast' ? 
+`FOCUS: Provide forecast information primarily. Include current conditions only for context if relevant.` :
+`FOCUS: This is a MIXED query - provide BOTH current weather AND forecast information comprehensively.`}
 
 CURRENT WEATHER IN ${weatherData.city.toUpperCase()}:
 • Temperature: ${weatherData.temperature}°C (feels like ${weatherData.feels_like}°C)
@@ -273,56 +331,59 @@ ${weatherData.forecast?.map((day: any, i: number) => {
 
 Your job:
 1. Use this REAL data to directly answer their specific question about ${weatherData.city}
-2. Be confident - this data is accurate and current
-3. If they ask about rain, check TODAY and TOMORROW's forecast descriptions
-4. If they ask about temperature, use the current temperature
-5. If they ask "will it rain tomorrow", look specifically at Tomorrow's forecast
+2. ${queryAnalysis.type === 'current' ? 
+   'Focus on CURRENT conditions - temperature, conditions, humidity, wind, sunrise/sunset' :
+   queryAnalysis.type === 'forecast' ? 
+   'Focus on FORECAST information - what\'s coming up, tomorrow, next few days' :
+   'Provide BOTH current conditions AND forecast since they want comprehensive weather info'}
+3. Be confident - this data is accurate and current
+4. If they ask about rain, check the relevant forecast descriptions
+5. If they ask about temperature, use the current temperature
 6. Be conversational and helpful
 7. Add relevant emojis and weather advice
 
 Answer their question directly using this real data!`
-                },
-                {
-                  role: 'user',
-                  content: lastMessage
-                }
-              ],
-              model: "llama-3.3-70b-versatile",
-              temperature: 0.3,
-              max_tokens: 1024,
-              top_p: 0.9,
-              stream: false,
-            });
-
-            const response = contextualResponse.choices[0]?.message?.content || `Here's the weather information for ${weatherData.city}! ${emoji}`;
-
-            return NextResponse.json({
-              role: 'assistant',
-              content: response,
-              weatherData: {
-                coordinates: weatherData.coordinates,
-                city: weatherData.city,
-                temperature: weatherData.temperature,
-                feels_like: weatherData.feels_like,
-                description: weatherData.description,
-                humidity: weatherData.humidity,
-                wind_speed: weatherData.wind_speed,
-                sunrise: weatherData.sunrise,
-                sunset: weatherData.sunset,
-                forecast: weatherData.forecast
+              },
+              {
+                role: 'user',
+                content: lastMessage
               }
-            });
-          } catch (error) {
-            console.error('Weather data error:', error);
-            return NextResponse.json({
-              role: 'assistant',
-              content: `I apologize, but I couldn't fetch the weather data for ${location} at the moment. Would you like to try another location or ask me something else?`
-            });
-          }
+            ],
+            model: "llama-3.3-70b-versatile",
+            temperature: 0.3,
+            max_tokens: 1024,
+            top_p: 0.9,
+            stream: false,
+          });
+
+          const response = contextualResponse.choices[0]?.message?.content || `Here's the weather information for ${weatherData.city}! ${emoji}`;
+
+          return NextResponse.json({
+            role: 'assistant',
+            content: response,
+            weatherData: {
+              coordinates: weatherData.coordinates,
+              city: weatherData.city,
+              temperature: weatherData.temperature,
+              feels_like: weatherData.feels_like,
+              description: weatherData.description,
+              humidity: weatherData.humidity,
+              wind_speed: weatherData.wind_speed,
+              sunrise: weatherData.sunrise,
+              sunset: weatherData.sunset,
+              forecast: weatherData.forecast
+            }
+          });
+        } catch (error) {
+          console.error('Weather data error:', error);
+          return NextResponse.json({
+            role: 'assistant',
+            content: `I apologize, but I couldn't fetch the weather data for ${location} at the moment. Would you like to try another location or ask me something else?`
+          });
         }
-      } catch (error) {
-        console.error('Location parsing error:', error);
       }
+    } catch (error) {
+      console.error('Location parsing error:', error);
     }
 
     // If not a weather query or weather processing failed, proceed with normal chat
