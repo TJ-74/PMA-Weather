@@ -9,7 +9,7 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-async function parseLocationFromMessage(message: string): Promise<string | null> {
+async function parseLocationFromMessage(messages: any[]): Promise<string | null> {
   try {
     const completion = await groq.chat.completions.create({
       messages: [
@@ -18,32 +18,30 @@ async function parseLocationFromMessage(message: string): Promise<string | null>
           content: `You are a weather query detection assistant. Your task is to:
 
 1. ONLY extract locations if the message is clearly asking about weather, temperature, forecast, or climate
-2. Ignore casual responses like "okay", "cool", "thanks", "yes", "no", etc.
-3. Look for weather-related keywords: weather, temperature, forecast, rain, snow, sunny, cloudy, hot, cold, humid, wind, storm, etc.
-4. Format locations as "City, State" for US or "City, Country" for international
-5. Return "null" if the message is NOT a weather query or contains no location
+2. Look at the ENTIRE conversation context to understand location references
+3. If the latest message doesn't mention a location but refers to weather, check previous messages for location context
+4. Ignore casual responses like "okay", "cool", "thanks", "yes", "no", etc.
+5. Look for weather-related keywords: weather, temperature, forecast, rain, snow, sunny, cloudy, hot, cold, humid, wind, storm, etc.
+6. Format locations as "City, State" for US or "City, Country" for international
+7. Return "null" if the message is NOT a weather query or contains no location context
 
-Weather query examples that should extract locations:
-"What's the weather in New York?" -> "New York, New York"
-"Temperature in London?" -> "London, United Kingdom"
-"Will it rain in Seattle tomorrow?" -> "Seattle, Washington"
-"How hot is it in Phoenix?" -> "Phoenix, Arizona"
+Examples with conversation context:
+User: "What's the weather in New York?"
+Assistant: "Current weather info..."
+User: "What about tomorrow?" 
+→ "New York, New York" (inherit from previous context)
 
-Non-weather queries that should return null:
-"okay" -> null
-"cool" -> null
-"thanks" -> null
-"yes" -> null
-"tell me a joke" -> null
-"how are you?" -> null
-"that's interesting" -> null
+User: "Tell me about Paris weather"
+Assistant: "Weather info for Paris..."
+User: "Will it rain there?"
+→ "Paris, France" (inherit from previous context)
 
-Only return a location if the message is clearly asking about weather AND mentions a place.`
+User: "How are you?"
+→ null (not weather related)
+
+Only return a location if there's a clear weather query (current or inherited from context).`
         },
-        {
-          role: 'user',
-          content: message
-        }
+        ...messages
       ],
       model: "llama-3.3-70b-versatile",
       temperature: 0.1,
@@ -64,45 +62,46 @@ Only return a location if the message is clearly asking about weather AND mentio
   }
 }
 
-async function analyzeWeatherQueryType(message: string): Promise<{type: 'current' | 'forecast' | 'mixed', timeframe?: string}> {
+async function analyzeWeatherQueryType(messages: any[]): Promise<{type: 'current' | 'forecast' | 'mixed', timeframe?: string}> {
   try {
     const completion = await groq.chat.completions.create({
       messages: [
         {
           role: 'system',
-          content: `You are a weather query analyzer. Analyze the user's message and determine what type of weather information they're asking for.
+          content: `You are a weather query analyzer. Analyze the user's conversation and determine what type of weather information they're asking for.
 
 Categories:
 - "current": Current weather conditions (today, now, currently)
 - "forecast": Future weather predictions (tomorrow, next week, weekend, forecast, will it rain, etc.)
 - "mixed": Both current and forecast information
-- "none": No weather information requested
+
+Look at the ENTIRE conversation context to understand what they're asking for:
+- Consider previous questions and follow-ups
+- If they just asked for current weather and now ask "what about tomorrow?", that's "forecast"
+- If they ask "how's the weather?" after discussing forecasts, determine from context
 
 Look for time indicators:
 - Current: "now", "today", "current", "currently", "at the moment", "right now"
 - Forecast: "tomorrow", "next week", "this weekend", "forecast", "will it", "going to", "next few days", "week ahead"
-- you have to be smart enough to figure out and make the decesion based on the message
+- Mixed: asking for comprehensive weather info or both current and future
 
 Return ONLY one word: "current", "forecast", or "mixed"
 
-Examples:
-"What's the weather in Paris?" -> current
-"What's the weather like in Tokyo today?" -> current
-"Will it rain in London tomorrow?" -> forecast
-"What's the forecast for New York?" -> forecast
-"Show me weather forecast for Miami" -> forecast
-"How's the weather in Berlin this week?" -> forecast
-"What's the current weather and forecast for Boston?" -> mixed
+Examples with context:
+User: "What's the weather in Tokyo?"
+→ current
 
-Those are just the examples of the messages you will be getting, you have to be smart enough to figure out and make the decesion based on the message
-`
+User: "What's the weather in Tokyo?"
+Assistant: "Current weather..."
+User: "What about tomorrow?"
+→ forecast
 
+User: "Give me the full weather picture for London"
+→ mixed
 
+Be smart about understanding the conversation flow and what the user really wants.`
         },
-        {
-          role: 'user',
-          content: message
-        }
+        ...messages
       ],
       model: "llama-3.3-70b-versatile",
       temperature: 0.1,
@@ -288,13 +287,13 @@ export async function POST(req: Request) {
     
     // Try to parse location from any message - let AI determine if it's weather-related
     try {
-      const location = await parseLocationFromMessage(lastMessage);
+      const location = await parseLocationFromMessage(messages);
       
       if (location) {
         try {
           const weatherData = await getWeatherData(location);
           const emoji = getWeatherEmoji(weatherData.description);
-          const queryAnalysis = await analyzeWeatherQueryType(lastMessage);
+          const queryAnalysis = await analyzeWeatherQueryType(messages);
 
           // Generate a contextual response that answers the specific question
           const contextualResponse = await groq.chat.completions.create({
@@ -331,23 +330,21 @@ ${weatherData.forecast?.map((day: any, i: number) => {
 
 Your job:
 1. Use this REAL data to directly answer their specific question about ${weatherData.city}
-2. ${queryAnalysis.type === 'current' ? 
+2. Look at the ENTIRE conversation context to understand what they're really asking for
+3. ${queryAnalysis.type === 'current' ? 
    'Focus on CURRENT conditions - temperature, conditions, humidity, wind, sunrise/sunset' :
    queryAnalysis.type === 'forecast' ? 
    'Focus on FORECAST information - what\'s coming up, tomorrow, next few days' :
    'Provide BOTH current conditions AND forecast since they want comprehensive weather info'}
-3. Be confident - this data is accurate and current
-4. If they ask about rain, check the relevant forecast descriptions
-5. If they ask about temperature, use the current temperature
-6. Be conversational and helpful
-7. Add relevant emojis and weather advice
+4. Be confident - this data is accurate and current
+5. If they ask about rain, check the relevant forecast descriptions
+6. If they ask about temperature, use the current temperature
+7. Be conversational and helpful, considering the conversation flow
+8. Add relevant emojis and weather advice
 
-Answer their question directly using this real data!`
+Answer their question directly using this real data and conversation context!`
               },
-              {
-                role: 'user',
-                content: lastMessage
-              }
+              ...messages
             ],
             model: "llama-3.3-70b-versatile",
             temperature: 0.3,
