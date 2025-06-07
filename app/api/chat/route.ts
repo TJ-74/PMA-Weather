@@ -1,13 +1,19 @@
 import { Groq } from 'groq-sdk';
 import { NextResponse } from 'next/server';
 
-if (!process.env.GROQ_API_KEY) {
-  throw new Error('Missing GROQ_API_KEY environment variable');
+// Initialize GROQ client with error handling
+let groq: Groq;
+try {
+  if (!process.env.GROQ_API_KEY) {
+    console.error('GROQ_API_KEY environment variable is not set');
+  } else {
+    groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
+  }
+} catch (error) {
+  console.error('Error initializing GROQ client:', error);
 }
-
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
 
 async function parseLocationFromMessage(messages: any[]): Promise<string | null> {
   try {
@@ -282,6 +288,13 @@ Examples:
 
 export async function POST(req: Request) {
   try {
+    if (!process.env.GROQ_API_KEY) {
+      return NextResponse.json(
+        { error: 'GROQ API key is not configured. Please contact the administrator.' },
+        { status: 500 }
+      );
+    }
+
     const { messages } = await req.json();
     const lastMessage = messages[messages.length - 1].content;
     

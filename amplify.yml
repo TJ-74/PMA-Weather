@@ -4,6 +4,15 @@ frontend:
     preBuild:
       commands:
         - npm install
+        - echo "Checking environment variables..."
+        - |
+          if [ -z "$GROQ_API_KEY" ]; then
+            echo "Warning: GROQ_API_KEY is not set"
+          fi
+        - |
+          if [ -z "$NEXT_PUBLIC_OPENWEATHER_API_KEY" ]; then
+            echo "Warning: NEXT_PUBLIC_OPENWEATHER_API_KEY is not set"
+          fi
     build:
       commands:
         - npm run build
