@@ -4,6 +4,7 @@ const nextConfig = {
     // Disable ESLint during builds
     ignoreDuringBuilds: true,
   },
+  output: 'standalone',
   async headers() {
     return [
       {
