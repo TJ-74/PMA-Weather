@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: us-east-1  # Change this to your desired region
-  FUNCTION_NAME: pma-test-app
+  FUNCTION_NAME: pma-weather
 
 jobs:
   deploy:
