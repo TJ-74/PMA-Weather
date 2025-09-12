@@ -3,7 +3,8 @@ name: Deploy to AWS Lambda
 on:
   push:
     branches:
-      - main  # or your default branch
+      - main
+      - TJ  # adding your current branch
 
 env:
   AWS_REGION: us-east-1  # Change this to your desired region
